@@ -1,5 +1,6 @@
+import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, Download, Upload, Check } from 'lucide-react'
 import dayjs from 'dayjs'
 import { useJars } from '../hooks/useJars'
 import { useThoughts } from '../hooks/useThoughts'
@@ -81,8 +82,60 @@ function ActivityChart({ months, c, accent }) {
 export default function Stats() {
   const navigate = useNavigate()
   const { jars } = useJars()
-  const { thoughts } = useThoughts()
+  const { thoughts, archive } = useThoughts()
   const c = useTheme()
+  const fileInputRef = useRef(null)
+  const [importDone, setImportDone] = useState(false)
+
+  function handleExport() {
+    const backup = {
+      jars,
+      thoughts,
+      archive,
+      theme: localStorage.getItem('jot_theme'),
+      dark: localStorage.getItem('jot_dark'),
+      exportedAt: new Date().toISOString(),
+    }
+    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `jar-of-thoughts-backup-${dayjs().format('YYYY-MM-DD')}.json`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
+
+  function handleImportFile(e) {
+    const file = e.target.files[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = () => {
+      try {
+        const data = JSON.parse(reader.result)
+        if (!Array.isArray(data.jars) || !Array.isArray(data.thoughts)) {
+          alert('That file doesn\'t look like a Jar of Thoughts backup.')
+          return
+        }
+        const ok = window.confirm('This will replace all your current jars and thoughts with the contents of this backup. Continue?')
+        if (!ok) return
+
+        localStorage.setItem('jot_jars', JSON.stringify(data.jars))
+        localStorage.setItem('jot_thoughts', JSON.stringify(data.thoughts))
+        localStorage.setItem('jot_archive', JSON.stringify(data.archive || []))
+        if (data.theme) localStorage.setItem('jot_theme', data.theme)
+        if (data.dark) localStorage.setItem('jot_dark', data.dark)
+
+        setImportDone(true)
+        setTimeout(() => window.location.reload(), 800)
+      } catch {
+        alert('Could not read that file — make sure it\'s an unmodified backup .json file.')
+      }
+    }
+    reader.readAsText(file)
+    e.target.value = ''
+  }
 
   const total = thoughts.length
   const jarCounts = jars
@@ -125,6 +178,35 @@ export default function Stats() {
             <ArrowLeft size={22} />
           </button>
           <h2 style={{ color: c.text }}>Your Stats</h2>
+        </div>
+
+        <div className="subpage-card" style={{ background: c.surface, border: `1px solid ${c.border}`, marginBottom: '16px' }}>
+          <SectionTitle color={c.muted}>Backup &amp; restore</SectionTitle>
+          <p style={{ fontSize: '12px', color: c.muted, marginBottom: '14px', lineHeight: 1.5 }}>
+            Save a copy of everything — jars, thoughts, and your archive — to a file you can store in Google Drive, Dropbox, or email to yourself.
+          </p>
+          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+            <button
+              onClick={handleExport}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px', background: c.accent, color: '#fff', border: 'none', borderRadius: '10px', padding: '9px 16px', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}
+            >
+              <Download size={15} /> Export backup
+            </button>
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'none', color: c.text, border: `1px solid ${c.border}`, borderRadius: '10px', padding: '9px 16px', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}
+            >
+              {importDone ? <Check size={15} /> : <Upload size={15} />}
+              {importDone ? 'Restored!' : 'Import backup'}
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="application/json"
+              onChange={handleImportFile}
+              style={{ display: 'none' }}
+            />
+          </div>
         </div>
 
         <div className="stats-grid">
