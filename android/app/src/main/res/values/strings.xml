@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Jar of Thoughts</string>
+    <string name="title_activity_main">Jar of Thoughts</string>
+    <string name="package_name">com.jarofthoughts.app</string>
+    <string name="custom_url_scheme">com.jarofthoughts.app</string>
+</resources>
