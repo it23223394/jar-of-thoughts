@@ -2,6 +2,9 @@ import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, Download, Upload, Check } from 'lucide-react'
 import dayjs from 'dayjs'
+import { Filesystem, Directory, Encoding } from '@capacitor/filesystem'
+import { Share } from '@capacitor/share'
+import { Capacitor } from '@capacitor/core'
 import { useJars } from '../hooks/useJars'
 import { useThoughts } from '../hooks/useThoughts'
 import { useTheme } from '../hooks/useTheme'
@@ -87,7 +90,7 @@ export default function Stats() {
   const fileInputRef = useRef(null)
   const [importDone, setImportDone] = useState(false)
 
-  function handleExport() {
+  async function handleExport() {
     const backup = {
       jars,
       thoughts,
@@ -96,15 +99,41 @@ export default function Stats() {
       dark: localStorage.getItem('jot_dark'),
       exportedAt: new Date().toISOString(),
     }
-    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `jar-of-thoughts-backup-${dayjs().format('YYYY-MM-DD')}.json`
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(url)
+    const fileName = `jar-of-thoughts-backup-${dayjs().format('YYYY-MM-DD')}.json`
+    const json = JSON.stringify(backup, null, 2)
+
+    if (Capacitor.isNativePlatform()) {
+      // Inside the installed Android app: write the file, then hand it
+      // straight to the native share sheet (Drive, Gmail, Save to device, etc.)
+      try {
+        const written = await Filesystem.writeFile({
+          path: fileName,
+          data: json,
+          directory: Directory.Cache,
+          encoding: Encoding.UTF8,
+        })
+
+        await Share.share({
+          title: 'Jar of Thoughts backup',
+          text: 'Your Jar of Thoughts backup file',
+          url: written.uri,
+          dialogTitle: 'Save your backup',
+        })
+      } catch (err) {
+        alert('Could not create the backup file: ' + (err?.message || err))
+      }
+    } else {
+      // Plain browser (e.g. npm run dev): normal download trick works fine here.
+      const blob = new Blob([json], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = fileName
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    }
   }
 
   function handleImportFile(e) {
